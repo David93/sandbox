@@ -1,1 +1,2 @@
-gcc -o fend fend.c
+all: fend.c
+	gcc -o fend fend.c

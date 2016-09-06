@@ -120,9 +120,10 @@ int main(int argc, char **argv) {
   int i;
   FILE *fp;
   char ch;
-  if (strcmp(argv[0], "-c") == 0)  /* Process optional arguments. */
+  
+  if ( argc >1 && strcmp(argv[1], "-c") == 0 )  /* Process optional arguments. */
   {
-	fp = fopen(argv[1], "r");
+	fp = fopen(argv[2], "r");
   }
   else
   {
@@ -130,11 +131,12 @@ int main(int argc, char **argv) {
 	if(fp==NULL)
 	{
 		struct passwd *pw = getpwuid(getuid());
-		fp = fopen(strcat(pw->pw_dir,".fendrc"),"r");
+		//printf("%s",strcat(pw->pw_dir,"/.fendrc"));
+		fp = fopen(strcat(pw->pw_dir,"/.fendrc"),"r");
 		if(fp==NULL)
 		{
-			printf("Must provide a config file.");
-			exit();
+			printf("Must provide a config file.\n");
+			exit(EXIT_FAILURE);
 		}
 	}
   }
