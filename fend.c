@@ -50,43 +50,44 @@ void sandb_kill(struct sandbox *sandb) {
 void sandb_handle_syscall(struct sandbox *sandb) {
   int i;
   struct user_regs_struct regs;
-
+  int syscall;
   if(ptrace(PTRACE_GETREGS, sandb->child, NULL, &regs) < 0)
     err(EXIT_FAILURE, "[SANDBOX] Failed to PTRACE_GETREGS:");
-
-  for(i = 0; i < sizeof(sandb_syscalls)/sizeof(*sandb_syscalls); i++) {
-    if(regs.orig_rax == sandb_syscalls[i].syscall) {
-      if(sandb_syscalls[i].callback != NULL)
-        sandb_syscalls[i].callback(sandb, &regs);
-      return;
-    }
+  syscall=regs.orig_rax;
+  if(syscall == __NR_open) {
+	//printf("%s", syscall_names[syscall-1]); /* System call name */
+	printf("%llu ", regs.rax); /* Address of the path */
+	printf("%llu ", regs.rcx); /* Flag */
+	printf("%llu\n ", regs.rdx); /* Mode */
   }
-
+  return;
+   
+  
+  /*
   if(regs.orig_rax == -1) {
     printf("[SANDBOX] Segfault ?! KILLING !!!\n");
   } else {
     printf("[SANDBOX] Trying to use devil syscall (%llu) ?!? KILLING !!!\n", regs.orig_rax);
   }
-  sandb_kill(sandb);
+  sandb_kill(sandb);*/
 }
 
 void sandb_init(struct sandbox *sandb, int argc, char **argv) {
   pid_t pid;
-
+ 
   pid = fork();
-
   if(pid == -1)
     err(EXIT_FAILURE, "[SANDBOX] Error on fork:");
-
-  if(pid == 0) {
-
+   if(pid == 0) {
+	
     if(ptrace(PTRACE_TRACEME, 0, NULL, NULL) < 0)
       err(EXIT_FAILURE, "[SANDBOX] Failed to PTRACE_TRACEME:");
-
-    if(execv(argv[0], argv) < 0)
+	
+    if(execvp(argv[0], argv) < 0)
       err(EXIT_FAILURE, "[SANDBOX] Failed to execv:");
 
   } else {
+	
     sandb->child = pid;
     sandb->progname = argv[0];
     wait(NULL);
@@ -146,13 +147,18 @@ int main(int argc, char **argv) {
   if(argc < 2) {
     errx(EXIT_FAILURE, "[SANDBOX] Usage : %s <elf> [<arg1...>]", argv[0]);
   }
-
+ */
+  //Have to change this call if -c is used
+  
+  
   sandb_init(&sandb, argc-1, argv+1);
 
   for(;;) {
     sandb_run(&sandb);
+	
   }
+  
 
-  */
+  
   return EXIT_SUCCESS;
 }
