@@ -13,7 +13,7 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <pwd.h>
-
+const int long_size = sizeof(long);
 struct sandbox {
   pid_t child;
   const char *progname;
@@ -47,18 +47,58 @@ void sandb_kill(struct sandbox *sandb) {
   exit(EXIT_FAILURE);
 }
 
+void get_path(pid_t child, long addr,
+             char **str){
+	char laddr[100]="";
+	*str=malloc(100);
+	int i,j,k,flag;
+	union u{
+		long val;
+		char chars[32];
+	}data;
+	i = 0;
+	flag=0;
+    while(1) {
+        data.val = ptrace(PTRACE_PEEKDATA,
+                          child, addr + i *sizeof(long),
+                          NULL);
+        strcat(laddr,data.chars);
+		++i;
+       // printf("%s",data.chars);
+		for(k=0;k<8;k++)
+		{
+			if(data.chars[k]=='\0')
+			{flag=1;break;}
+		}	
+		if(flag==1)
+			break;
+		
+    }
+	//printf("%s \n",laddr);
+    sprintf(*str,"%s",laddr);
+	//printf("%s \n",*str);
+	//str=laddr;
+    
+}
+
+
 void sandb_handle_syscall(struct sandbox *sandb) {
   int i;
   struct user_regs_struct regs;
   int syscall;
+  char *path;
   if(ptrace(PTRACE_GETREGS, sandb->child, NULL, &regs) < 0)
     err(EXIT_FAILURE, "[SANDBOX] Failed to PTRACE_GETREGS:");
+  //data.val=ptrace(PTRACE_PEEKDATA, sandb->child, regs.rdi, NULL);
+ 
   syscall=regs.orig_rax;
   if(syscall == __NR_open) {
-	//printf("%s", syscall_names[syscall-1]); /* System call name */
-	printf("%llu ", regs.rax); /* Address of the path */
-	printf("%llu ", regs.rcx); /* Flag */
-	printf("%llu\n ", regs.rdx); /* Mode */
+	get_path(sandb->child,regs.rdi,&path);
+	printf("%s\n",path);
+	// printf("%lu \n",lenpath);
+	//printf("%llu ", regs.rcx); /* Flag */
+	//printf("%llu\n ", regs.rdx); /* Mode */
+	
   }
   return;
    
