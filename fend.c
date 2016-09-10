@@ -49,18 +49,20 @@ void sandb_kill(struct sandbox *sandb) {
   wait(NULL);
   exit(EXIT_FAILURE);
 }
-void checkperms(char *perm,int mode){
+int checkperms(char *perm,int mode){
+	errno=13;
 	if((mode&O_ACCMODE)==0|(mode&O_ACCMODE)==2)
 		if(perm[0]=='1')
 			printf("Read Permission good!\n");
-		else
-			printf("No read permission!\n");
+		else{
+			fprintf(stderr, "EACCESS %s: System Call Bypassed\n", strerror(errno));return 0;
+		}
 	if((mode&O_ACCMODE)==1|(mode&O_ACCMODE)==2)
 		if(perm[1]=='1')
 			printf("Write Permission good!\n");
 		else
-			printf("No write permission!\n");
-	
+		{	fprintf(stderr, "EACCESS %s: System Call Bypassed\n", strerror(errno));return 0;}
+	return 1;
 }
 void get_path(pid_t child, long addr,
              char **str){
@@ -78,8 +80,7 @@ void get_path(pid_t child, long addr,
         data.val = ptrace(PTRACE_PEEKDATA,
                           child, addr + i *sizeof(long),
                           NULL);//getting path from user space, using address obtained earlier from address
-        //strcat(laddr,data.chars);
-		++i;
+     	++i;
         for(k=0;k<8;k++)
 		{
 			if(data.chars[k]=='\0')
@@ -95,24 +96,26 @@ void get_path(pid_t child, long addr,
 	sprintf(*str,"%s",laddr);	
     
 }
-void pattern_match(char *p,FILE *f,int mode){
-	char *line=malloc(100);
+
+void pattern_match(char *p,FILE *f,int mode,struct sandbox *sandb){
+	char* line=malloc(100);
 	char* perm=malloc(20);
 	char* foundperm=malloc(20);
 	char* pattern=malloc(20);
 	int match=0;
 	while (fgets(line, 100, f)!=NULL ) {
-       	perm=strtok(line," ");
+		perm=strtok(line," ");
 		pattern=strtok(NULL," ");
 		if(fnmatch(pattern,p,0)==0){
 			printf("%s matched with %s!\n",p,pattern);
 			strcpy(foundperm,perm);
 			match=1;
-			
-			}
+		}
     }
 	if(match==1){
 		checkperms(foundperm,mode);
+		//if(checkperms(foundperm,mode)==0);
+		  //set regs to getpid() to bypass system call
 	
 	}
 	//rewind(f);
@@ -123,7 +126,7 @@ void sandb_handle_syscall(struct sandbox *sandb,FILE *f) {
   int i;
   struct user_regs_struct regs;
   int syscall;
- 
+  char line[100];
  
   char *path;
   
@@ -134,21 +137,23 @@ void sandb_handle_syscall(struct sandbox *sandb,FILE *f) {
   if(syscall == __NR_open) {
 	if(entry_flag==1){
 		get_path(sandb->child,regs.rdi,&path);
-		//printf("%s %zu\n",path,strlen(path));
-		pattern_match(path,f,regs.rsi);
+		//printf("%s %zu\n",path,strlen(path));	
+		pattern_match(path,f,regs.rsi,sandb);
 		rewind(f);
-		entry_flag=0;	
-	}
+		entry_flag=0;
+		
+		}	
+
 	else
 		entry_flag=1;
 	
-	
+  }
 	//free(line)'
     //err(EXIT_FAILURE,"File traversal done, exiting now.\n");
 	//exit(EXIT_FAILURE);
 	
 	 
-  }
+  
   //return;
   
   
@@ -214,18 +219,21 @@ void sandb_run(struct sandbox *sandb, FILE *f) {
 int main(int argc, char **argv) {
   struct sandbox sandb;
   int i;
-  FILE *fp;
+  FILE *fp=NULL;
   char ch;
   
   if ( argc >1 && strcmp(argv[1], "-c") == 0 )  /* Process optional arguments. */
   {
 	fp = fopen(argv[2], "r");
+	
   }
   if(fp==NULL)
   {
 	fp = fopen(".fendrc", "r");
+	
 	if(fp==NULL)
 	{
+		
 		struct passwd *pw = getpwuid(getuid());
 		fp = fopen(strcat(pw->pw_dir,"/.fendrc"),"r");
 		if(fp==NULL)
@@ -234,16 +242,15 @@ int main(int argc, char **argv) {
 			exit(EXIT_FAILURE);
 		}
 	}
-  }
-
+  }/*
   
-  /*
   if(argc < 2) {
     errx(EXIT_FAILURE, "[SANDBOX] Usage : %s <elf> [<arg1...>]", argv[0]);
   }
  */
   //Have to change this call if -c is used
-  
+  if(fp==NULL)
+	  printf("WHUT");
   if(strcmp(argv[1], "-c")!=0)
 	sandb_init(&sandb, argc-1, argv+1);
   else
