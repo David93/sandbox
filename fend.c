@@ -12,7 +12,10 @@
 #include <errno.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <pwd.h>
+#include <fnmatch.h>
 const int long_size = sizeof(long);
 struct sandbox {
   pid_t child;
@@ -46,7 +49,19 @@ void sandb_kill(struct sandbox *sandb) {
   wait(NULL);
   exit(EXIT_FAILURE);
 }
-
+void checkperms(char *perm,int mode){
+	if((mode&O_ACCMODE)==0|(mode&O_ACCMODE)==2)
+		if(perm[0]=='1')
+			printf("Read Permission good!\n");
+		else
+			printf("No read permission!\n");
+	if((mode&O_ACCMODE)==1|(mode&O_ACCMODE)==2)
+		if(perm[1]=='1')
+			printf("Write Permission good!\n");
+		else
+			printf("No write permission!\n");
+	
+}
 void get_path(pid_t child, long addr,
              char **str){
 	char laddr[100]="";
@@ -57,51 +72,85 @@ void get_path(pid_t child, long addr,
 		char chars[32];
 	}data;
 	i = 0;
+	j=0;
 	flag=0;
     while(1) {
         data.val = ptrace(PTRACE_PEEKDATA,
                           child, addr + i *sizeof(long),
-                          NULL);
-        strcat(laddr,data.chars);
+                          NULL);//getting path from user space, using address obtained earlier from address
+        //strcat(laddr,data.chars);
 		++i;
-       // printf("%s",data.chars);
-		for(k=0;k<8;k++)
+        for(k=0;k<8;k++)
 		{
 			if(data.chars[k]=='\0')
-			{flag=1;break;}
+			{flag=1;laddr[j]='\0';break;}
+			laddr[j]=data.chars[k];
+			j++;
+		
 		}	
 		if(flag==1)
 			break;
 		
     }
-	//printf("%s \n",laddr);
-    sprintf(*str,"%s",laddr);
-	//printf("%s \n",*str);
-	//str=laddr;
+	sprintf(*str,"%s",laddr);	
     
 }
-
-
-void sandb_handle_syscall(struct sandbox *sandb) {
+void pattern_match(char *p,FILE *f,int mode){
+	char *line=malloc(100);
+	char* perm=malloc(20);
+	char* foundperm=malloc(20);
+	char* pattern=malloc(20);
+	int match=0;
+	while (fgets(line, 100, f)!=NULL ) {
+       	perm=strtok(line," ");
+		pattern=strtok(NULL," ");
+		if(fnmatch(pattern,p,0)==0){
+			printf("%s matched with %s!\n",p,pattern);
+			strcpy(foundperm,perm);
+			match=1;
+			
+			}
+    }
+	if(match==1){
+		checkperms(foundperm,mode);
+	
+	}
+	//rewind(f);
+}
+int entry_flag=1;
+void sandb_handle_syscall(struct sandbox *sandb,FILE *f) {
+  
   int i;
   struct user_regs_struct regs;
   int syscall;
+ 
+ 
   char *path;
+  
   if(ptrace(PTRACE_GETREGS, sandb->child, NULL, &regs) < 0)
     err(EXIT_FAILURE, "[SANDBOX] Failed to PTRACE_GETREGS:");
-  //data.val=ptrace(PTRACE_PEEKDATA, sandb->child, regs.rdi, NULL);
- 
   syscall=regs.orig_rax;
+  
   if(syscall == __NR_open) {
-	get_path(sandb->child,regs.rdi,&path);
-	printf("%s\n",path);
-	// printf("%lu \n",lenpath);
-	//printf("%llu ", regs.rcx); /* Flag */
-	//printf("%llu\n ", regs.rdx); /* Mode */
+	if(entry_flag==1){
+		get_path(sandb->child,regs.rdi,&path);
+		//printf("%s %zu\n",path,strlen(path));
+		pattern_match(path,f,regs.rsi);
+		rewind(f);
+		entry_flag=0;	
+	}
+	else
+		entry_flag=1;
 	
+	
+	//free(line)'
+    //err(EXIT_FAILURE,"File traversal done, exiting now.\n");
+	//exit(EXIT_FAILURE);
+	
+	 
   }
-  return;
-   
+  //return;
+  
   
   /*
   if(regs.orig_rax == -1) {
@@ -109,7 +158,8 @@ void sandb_handle_syscall(struct sandbox *sandb) {
   } else {
     printf("[SANDBOX] Trying to use devil syscall (%llu) ?!? KILLING !!!\n", regs.orig_rax);
   }
-  sandb_kill(sandb);*/
+  */
+ 
 }
 
 void sandb_init(struct sandbox *sandb, int argc, char **argv) {
@@ -134,12 +184,13 @@ void sandb_init(struct sandbox *sandb, int argc, char **argv) {
   }
 }
 
-void sandb_run(struct sandbox *sandb) {
+void sandb_run(struct sandbox *sandb, FILE *f) {
   int status;
-
+  
   if(ptrace(PTRACE_SYSCALL, sandb->child, NULL, NULL) < 0) {
     if(errno == ESRCH) {
       waitpid(sandb->child, &status, __WALL | WNOHANG);
+	  
       sandb_kill(sandb);
     } else {
       err(EXIT_FAILURE, "[SANDBOX] Failed to PTRACE_SYSCALL:");
@@ -148,11 +199,15 @@ void sandb_run(struct sandbox *sandb) {
 
   wait(&status);
 
-  if(WIFEXITED(status))
+  if(WIFEXITED(status)){
     exit(EXIT_SUCCESS);
 
+  }
   if(WIFSTOPPED(status)) {
-    sandb_handle_syscall(sandb);
+	
+	
+    sandb_handle_syscall(sandb,f);
+    
   }
 }
 
@@ -166,13 +221,12 @@ int main(int argc, char **argv) {
   {
 	fp = fopen(argv[2], "r");
   }
-  else
+  if(fp==NULL)
   {
 	fp = fopen(".fendrc", "r");
 	if(fp==NULL)
 	{
 		struct passwd *pw = getpwuid(getuid());
-		//printf("%s",strcat(pw->pw_dir,"/.fendrc"));
 		fp = fopen(strcat(pw->pw_dir,"/.fendrc"),"r");
 		if(fp==NULL)
 		{
@@ -190,11 +244,13 @@ int main(int argc, char **argv) {
  */
   //Have to change this call if -c is used
   
-  
-  sandb_init(&sandb, argc-1, argv+1);
-
+  if(strcmp(argv[1], "-c")!=0)
+	sandb_init(&sandb, argc-1, argv+1);
+  else
+	sandb_init(&sandb, argc-3, argv+3);  
   for(;;) {
-    sandb_run(&sandb);
+	
+    sandb_run(&sandb,fp);
 	
   }
   
