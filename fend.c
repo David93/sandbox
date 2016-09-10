@@ -52,6 +52,7 @@ struct sandb_syscall sandb_syscalls[] = {
   {__NR_mmap,            NULL},
   {__NR_access,          NULL},
   {__NR_open,            openhandle},
+  {__NR_openat,          openathandle},
   {__NR_fstat,           NULL},
   {__NR_close,           NULL},
   {__NR_mprotect,        NULL},
