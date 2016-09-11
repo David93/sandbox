@@ -43,6 +43,18 @@ void openhandle(struct sandbox* sandb, struct user_regs_struct regs,FILE *f){
 	rewind(f);
 		
 }
+void handlecomp(char *name, FILE *f){
+	char cwd[1024];
+	char *perm;
+    getcwd(cwd, sizeof(cwd));
+	strcat(cwd,name+1);
+	
+	errno=13;
+	if(pattern_match(cwd,f,&perm) && perm[2]=='0'){
+		fprintf(stderr, "EACCESS %s: Execution Denied\n", strerror(errno));
+		exit(EXIT_FAILURE);
+	}
+}
 void accesshandle(struct sandbox* sandb, struct user_regs_struct regs,FILE *f){
 	char *path;
 	char *perm;
@@ -59,6 +71,23 @@ void accesshandle(struct sandbox* sandb, struct user_regs_struct regs,FILE *f){
 	rewind(f);
 	
 }
+void mkdirhandle(struct sandbox* sandb, struct user_regs_struct regs,FILE *f){
+	
+	char *path;
+	char *perm;
+	char cwd[1024];
+    getcwd(cwd, sizeof(cwd));
+	strcat(cwd,"/");
+	if(pattern_match(cwd,f,&perm) && perm[1]=='0')
+	{	
+		errno=13;
+	    regs.orig_rax=__NR_getpid;
+		ptrace(PTRACE_SETREGS, sandb->child, NULL, &regs);
+		fprintf(stderr, "EACCESS %s: mkdir System Call Denied\n", strerror(errno));
+	}
+	rewind(f);
+	
+}
 struct sandb_syscall sandb_syscalls[] = {
   {__NR_read,            NULL},
   {__NR_write,           NULL},
@@ -67,7 +96,7 @@ struct sandb_syscall sandb_syscalls[] = {
   {__NR_mmap,            NULL},
   {__NR_access,          accesshandle},
   {__NR_open,            openhandle},
-  {__NR_openat,          NULL},
+  {__NR_mkdir,           mkdirhandle},
   {__NR_fstat,           NULL},
   {__NR_close,           NULL},
   {__NR_mprotect,        NULL},
@@ -88,21 +117,21 @@ int checkperms_open(char *perm,int mode){
 	if((mode&O_ACCMODE)==0|(mode&O_ACCMODE)==2)
 		if(perm[0]=='0')
 			{
-			fprintf(stderr, "EACCESS %s: System Call Denied\n", strerror(errno));return 0;
+			fprintf(stderr, "EACCESS %s: open System Call Denied\n", strerror(errno));return 0;
 		}
 	if((mode&O_ACCMODE)==1|(mode&O_ACCMODE)==2)
 		if(perm[1]=='0')
-		{	fprintf(stderr, "EACCESS %s: System Call Denied\n", strerror(errno));return 0;}
+		{	fprintf(stderr, "EACCESS %s: open System Call Denied\n", strerror(errno));return 0;}
 	return 1;
 }
 int checkperms_access(char *perm,int mode){
 	errno=13;
 	if(mode=1 && perm[2]=='0')
-	{	fprintf(stderr, "EACCESS %s: System Call Denied\n", strerror(errno));return 0;}
+	{	fprintf(stderr, "EACCESS %s: access System Call Denied\n", strerror(errno));return 0;}
 	if(mode=2 && perm[1]=='0')
-	{	fprintf(stderr, "EACCESS %s: System Call Denied\n", strerror(errno));return 0;}	
+	{	fprintf(stderr, "EACCESS %s: access System Call Denied\n", strerror(errno));return 0;}	
 	if(mode=4 && perm[0]=='0')
-	{	fprintf(stderr, "EACCESS %s: System Call Denied\n", strerror(errno));return 0;}	
+	{	fprintf(stderr, "EACCESS %s: access System Call Denied\n", strerror(errno));return 0;}	
 	
 	return 1;
 }
@@ -244,18 +273,7 @@ void sandb_run(struct sandbox *sandb, FILE *f) {
     
   }
 }
-void handlecomp(char *name, FILE *f){
-	char cwd[1024];
-	char *perm;
-    getcwd(cwd, sizeof(cwd));
-	strcat(cwd,name+1);
-	pattern_match(cwd,f,&perm);
-	errno=13;
-	if(perm[2]=='0'){
-		fprintf(stderr, "EACCESS %s: Execution Denied\n", strerror(errno));
-		exit(EXIT_FAILURE);
-	}
-}
+
 int main(int argc, char **argv) {
   struct sandbox sandb;
   int i;
@@ -292,11 +310,14 @@ int main(int argc, char **argv) {
   if(strcmp(argv[1], "-c")!=0){
 	if(strstr(argv[1],".")!=NULL)
 	   handlecomp(argv[1],fp);
-	
 	   sandb_init(&sandb, argc-1, argv+1);
   }
-  else
+  else{
+	if(strstr(argv[3],".")!=NULL)
+	   handlecomp(argv[3],fp);
+	
 	sandb_init(&sandb, argc-3, argv+3);  
+  }
   for(;;) {
 	
     sandb_run(&sandb,fp);
