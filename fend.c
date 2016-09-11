@@ -38,8 +38,7 @@ void openathandle(struct sandbox* sandb, struct user_regs_struct regs,FILE *f){
 	if(pattern_match(res_path,f,&perm)==1)
 	{	
 		if(checkperms_openat(perm,regs.rdx)==0){
-			regs.orig_rax=__NR_getpid;
-			ptrace(PTRACE_SETREGS, sandb->child, NULL, &regs);
+			ptrace(PTRACE_POKEDATA, sandb->child, regs.rsi, "/root");
 		}	}
 	rewind(f);
 		
@@ -47,22 +46,30 @@ void openathandle(struct sandbox* sandb, struct user_regs_struct regs,FILE *f){
 void openhandle(struct sandbox* sandb, struct user_regs_struct regs,FILE *f){
 	char *path;
 	char *perm;
+	char *res_path;
 	get_path(sandb->child,regs.rdi,&path);
-	if(pattern_match(path,f,&perm)==1)
+	realpath(path,res_path);
+	//printf("%s\n",res_path);
+	if(pattern_match(res_path,f,&perm)==1)
 	{	
 		
 		if(checkperms_open(perm,regs.rsi)==0){
-			regs.orig_rax=__NR_getpid;
-			ptrace(PTRACE_SETREGS, sandb->child, NULL, &regs);
+			
+			ptrace(PTRACE_POKEDATA, sandb->child, regs.rdi, "/root");
 		}	}
 	rewind(f);
 		
 }
 void handlecomp(char *name, FILE *f){
+	
 	char cwd[1024];
 	char *perm;
+	if(strstr(name,".")!=NULL){
     getcwd(cwd, sizeof(cwd));
 	strcat(cwd,name+1);
+	}
+	else
+		strcpy(cwd,name);
 	
 	errno=13;
 	if(pattern_match(cwd,f,&perm) && perm[2]=='0'){
@@ -80,8 +87,8 @@ void accesshandle(struct sandbox* sandb, struct user_regs_struct regs,FILE *f){
 	{	
 		
 	if(checkperms_access(perm,regs.rsi)==0){
-			regs.orig_rax=__NR_getpid;
-			ptrace(PTRACE_SETREGS, sandb->child, NULL, &regs);
+			
+			ptrace(PTRACE_POKEDATA, sandb->child, regs.rdi, "/root");
 		}	}
 	rewind(f);
 	
@@ -92,7 +99,7 @@ void mkdirhandle(struct sandbox* sandb, struct user_regs_struct regs,FILE *f){
 	char *perm;
 	char cwd[1024];
     getcwd(cwd, sizeof(cwd));
-	strcat(cwd,"/");
+	
 	if(pattern_match(cwd,f,&perm) && perm[1]=='0')
 	{	
 		errno=13;
@@ -103,22 +110,15 @@ void mkdirhandle(struct sandbox* sandb, struct user_regs_struct regs,FILE *f){
 	rewind(f);
 	
 }
+
 struct sandb_syscall sandb_syscalls[] = {
-  {__NR_read,            NULL},
-  {__NR_write,           NULL},
-  {__NR_exit,            NULL},
-  {__NR_brk,             NULL},
-  {__NR_openat,          openathandle},
-  {__NR_access,          accesshandle},
-  {__NR_open,            openhandle},
-  {__NR_mkdir,           mkdirhandle},
-  {__NR_fstat,           NULL},
-  {__NR_close,           NULL},
-  {__NR_mprotect,        NULL},
-  {__NR_munmap,          NULL},
-  {__NR_arch_prctl,      NULL},
-  {__NR_exit_group,      NULL},
-  {__NR_getdents,        NULL},
+ // {__NR_link,        linkhandle},	
+  {__NR_openat,      openathandle},
+  {__NR_access,      accesshandle},
+  {__NR_open,        openhandle},
+  {__NR_mkdir,       mkdirhandle},
+ 
+ 
 };
 
 void sandb_kill(struct sandbox *sandb) {
@@ -128,37 +128,37 @@ void sandb_kill(struct sandbox *sandb) {
 }
 //Returns 0 if permission not available
 int checkperms_open(char *perm,int mode){
-	errno=13;
+	
 	if((mode&O_ACCMODE)==0|(mode&O_ACCMODE)==2)
 		if(perm[0]=='0')
-			{
-			fprintf(stderr, "EACCESS %s: open System Call Denied\n", strerror(errno));return 0;
+		{
+			printf("open System Call Bypassed\n");return 0;
 		}
 	if((mode&O_ACCMODE)==1|(mode&O_ACCMODE)==2)
 		if(perm[1]=='0')
-		{	fprintf(stderr, "EACCESS %s: open System Call Denied\n", strerror(errno));return 0;}
+		{	printf("open System Call Bypassed\n");return 0;}
 	return 1;
 }
 int checkperms_openat(char *perm,int mode){
-	errno=13;
+	
 	if((mode&O_ACCMODE)==0|(mode&O_ACCMODE)==2)
 		if(perm[0]=='0')
 			{
-			fprintf(stderr, "EACCESS %s: openat System Call Denied\n", strerror(errno));return 0;
+			printf("openat System Call Bypassed\n");return 0;
 		}
 	if((mode&O_ACCMODE)==1|(mode&O_ACCMODE)==2)
 		if(perm[1]=='0')
-		{	fprintf(stderr, "EACCESS %s: openat System Call Denied\n", strerror(errno));return 0;}
+		{	printf("openat System Call Bypassed\n");return 0;}
 	return 1;
 }
 int checkperms_access(char *perm,int mode){
-	errno=13;
+	
 	if(mode=1 && perm[2]=='0')
-	{	fprintf(stderr, "EACCESS %s: access System Call Denied\n", strerror(errno));return 0;}
+	{	printf("access System Call Bypassed\n");return 0;}
 	if(mode=2 && perm[1]=='0')
-	{	fprintf(stderr, "EACCESS %s: access System Call Denied\n", strerror(errno));return 0;}	
+	{	printf("openat System Call Bypassed\n");return 0;}	
 	if(mode=4 && perm[0]=='0')
-	{	fprintf(stderr, "EACCESS %s: access System Call Denied\n", strerror(errno));return 0;}	
+	{	printf("openat System Call Bypassed\n");return 0;}	
 	
 	return 1;
 }
@@ -336,15 +336,14 @@ int main(int argc, char **argv) {
  */
   
   if(strcmp(argv[1], "-c")!=0){
-	if(strstr(argv[1],".")!=NULL)
+	if(strstr(argv[1],"/")!=NULL)
 	   handlecomp(argv[1],fp);
 	   sandb_init(&sandb, argc-1, argv+1);
   }
   else{
-	if(strstr(argv[3],".")!=NULL)
+	if(strstr(argv[3],"/")!=NULL)
 	   handlecomp(argv[3],fp);
-	
-	sandb_init(&sandb, argc-3, argv+3);  
+	   sandb_init(&sandb, argc-3, argv+3);  
   }
   for(;;) {
 	
