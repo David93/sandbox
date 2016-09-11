@@ -9,6 +9,7 @@
 #include <asm/unistd.h>
 #include <signal.h>
 #include <string.h>
+#include <limits.h>
 #include <errno.h>
 #include <sys/time.h>
 #include <sys/types.h>
@@ -28,15 +29,29 @@ struct sandb_syscall {
   int syscall;
   void (*callback)(struct sandbox* sandb, struct user_regs_struct regs, FILE *f);
 };
+void openathandle(struct sandbox* sandb, struct user_regs_struct regs,FILE *f){
+	char *path;
+	char *res_path;
+	char *perm;
+	get_path(sandb->child,regs.rsi,&path);
+	realpath(path,res_path);
+	if(pattern_match(res_path,f,&perm)==1)
+	{	
+		if(checkperms_openat(perm,regs.rdx)==0){
+			regs.orig_rax=__NR_getpid;
+			ptrace(PTRACE_SETREGS, sandb->child, NULL, &regs);
+		}	}
+	rewind(f);
+		
+}
 void openhandle(struct sandbox* sandb, struct user_regs_struct regs,FILE *f){
 	char *path;
 	char *perm;
 	get_path(sandb->child,regs.rdi,&path);
-	//printf("%s \n",path);
-    if(pattern_match(path,f,&perm)==1)
+	if(pattern_match(path,f,&perm)==1)
 	{	
-		//printf("%s \n",perm);
-	if(checkperms_open(perm,regs.rsi)==0){
+		
+		if(checkperms_open(perm,regs.rsi)==0){
 			regs.orig_rax=__NR_getpid;
 			ptrace(PTRACE_SETREGS, sandb->child, NULL, &regs);
 		}	}
@@ -93,7 +108,7 @@ struct sandb_syscall sandb_syscalls[] = {
   {__NR_write,           NULL},
   {__NR_exit,            NULL},
   {__NR_brk,             NULL},
-  {__NR_mmap,            NULL},
+  {__NR_openat,          openathandle},
   {__NR_access,          accesshandle},
   {__NR_open,            openhandle},
   {__NR_mkdir,           mkdirhandle},
@@ -122,6 +137,18 @@ int checkperms_open(char *perm,int mode){
 	if((mode&O_ACCMODE)==1|(mode&O_ACCMODE)==2)
 		if(perm[1]=='0')
 		{	fprintf(stderr, "EACCESS %s: open System Call Denied\n", strerror(errno));return 0;}
+	return 1;
+}
+int checkperms_openat(char *perm,int mode){
+	errno=13;
+	if((mode&O_ACCMODE)==0|(mode&O_ACCMODE)==2)
+		if(perm[0]=='0')
+			{
+			fprintf(stderr, "EACCESS %s: openat System Call Denied\n", strerror(errno));return 0;
+		}
+	if((mode&O_ACCMODE)==1|(mode&O_ACCMODE)==2)
+		if(perm[1]=='0')
+		{	fprintf(stderr, "EACCESS %s: openat System Call Denied\n", strerror(errno));return 0;}
 	return 1;
 }
 int checkperms_access(char *perm,int mode){
@@ -177,7 +204,8 @@ int pattern_match(char *p,FILE *f,char** foundperm){
 	int match=0;
 	while (!feof(f) ) {
 		fscanf(f,"%s %s",perm,pattern);
-		if(fnmatch(pattern,p,0)==0){
+		//printf("%s\n",pattern);
+		if(fnmatch(pattern,p,FNM_PATHNAME)==0){
 			//printf("%s matched with %s!\n",p,pattern);
 			strcpy(*foundperm,perm);
 			match=1;
