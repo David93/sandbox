@@ -1,4 +1,4 @@
 111 /lib/x*
-011 /etc/ld.so*
-011 /etc/ld*
-111 /home/dmjoshy/sandbox/*
+111 /etc/ld.so*
+011 /etc/ld.so.preload
+110 /home/dmjoshy/sandbox/*

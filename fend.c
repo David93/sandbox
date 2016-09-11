@@ -22,7 +22,6 @@ struct sandbox {
   pid_t child;
   const char *progname;
 };
-//void openhandle(struct sandbox*, struct user_regs_struct, FILE );
 void get_path(pid_t,long,char**);
 int pattern_match(char*,FILE*, char**);
 struct sandb_syscall {
@@ -33,7 +32,7 @@ void openhandle(struct sandbox* sandb, struct user_regs_struct regs,FILE *f){
 	char *path;
 	char *perm;
 	get_path(sandb->child,regs.rdi,&path);
-	printf("%s \n",path);
+	//printf("%s \n",path);
     if(pattern_match(path,f,&perm)==1)
 	{	
 		//printf("%s \n",perm);
@@ -44,15 +43,31 @@ void openhandle(struct sandbox* sandb, struct user_regs_struct regs,FILE *f){
 	rewind(f);
 		
 }
+void accesshandle(struct sandbox* sandb, struct user_regs_struct regs,FILE *f){
+	char *path;
+	char *perm;
+	get_path(sandb->child,regs.rdi,&path);
+	//printf("%s \n",path);
+   
+    if(pattern_match(path,f,&perm)==1)
+	{	
+		
+	if(checkperms_access(perm,regs.rsi)==0){
+			regs.orig_rax=__NR_getpid;
+			ptrace(PTRACE_SETREGS, sandb->child, NULL, &regs);
+		}	}
+	rewind(f);
+	
+}
 struct sandb_syscall sandb_syscalls[] = {
   {__NR_read,            NULL},
   {__NR_write,           NULL},
   {__NR_exit,            NULL},
   {__NR_brk,             NULL},
   {__NR_mmap,            NULL},
-  {__NR_access,          NULL},
+  {__NR_access,          accesshandle},
   {__NR_open,            openhandle},
-  {__NR_openat,          openathandle},
+  {__NR_openat,          NULL},
   {__NR_fstat,           NULL},
   {__NR_close,           NULL},
   {__NR_mprotect,        NULL},
@@ -80,7 +95,17 @@ int checkperms_open(char *perm,int mode){
 		{	fprintf(stderr, "EACCESS %s: System Call Denied\n", strerror(errno));return 0;}
 	return 1;
 }
-
+int checkperms_access(char *perm,int mode){
+	errno=13;
+	if(mode=1 && perm[2]=='0')
+	{	fprintf(stderr, "EACCESS %s: System Call Denied\n", strerror(errno));return 0;}
+	if(mode=2 && perm[1]=='0')
+	{	fprintf(stderr, "EACCESS %s: System Call Denied\n", strerror(errno));return 0;}	
+	if(mode=4 && perm[0]=='0')
+	{	fprintf(stderr, "EACCESS %s: System Call Denied\n", strerror(errno));return 0;}	
+	
+	return 1;
+}
 void get_path(pid_t child, long addr,
              char **str){
 	char laddr[100]="";
@@ -124,7 +149,7 @@ int pattern_match(char *p,FILE *f,char** foundperm){
 	while (!feof(f) ) {
 		fscanf(f,"%s %s",perm,pattern);
 		if(fnmatch(pattern,p,0)==0){
-			printf("%s matched with %s!\n",p,pattern);
+			//printf("%s matched with %s!\n",p,pattern);
 			strcpy(*foundperm,perm);
 			match=1;
 		}
