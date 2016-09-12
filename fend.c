@@ -38,7 +38,7 @@ void openathandle(struct sandbox* sandb, struct user_regs_struct regs,FILE *f){
 	if(pattern_match(res_path,f,&perm)==1)
 	{	
 		if(checkperms_openat(perm,regs.rdx)==0){
-			ptrace(PTRACE_POKEDATA, sandb->child, regs.rsi, "/root");
+			ptrace(PTRACE_POKEDATA, sandb->child, regs.rsi, "/root/x");
 		}	}
 	rewind(f);
 		
@@ -49,13 +49,15 @@ void openhandle(struct sandbox* sandb, struct user_regs_struct regs,FILE *f){
 	char *res_path;
 	get_path(sandb->child,regs.rdi,&path);
 	realpath(path,res_path);
-	//printf("%s\n",res_path);
+	
 	if(pattern_match(res_path,f,&perm)==1)
 	{	
-		
+		printf("%s\n",res_path);
 		if(checkperms_open(perm,regs.rsi)==0){
+			regs.orig_rax=__NR_getpid;
 			
-			ptrace(PTRACE_POKEDATA, sandb->child, regs.rdi, "/root");
+			ptrace(PTRACE_SETREGS, sandb->child, NULL, &regs);
+			//ptrace(PTRACE_POKEDATA, sandb->child, regs.rdi, "/root");
 		}	}
 	rewind(f);
 		
@@ -88,7 +90,7 @@ void accesshandle(struct sandbox* sandb, struct user_regs_struct regs,FILE *f){
 		
 	if(checkperms_access(perm,regs.rsi)==0){
 			
-			ptrace(PTRACE_POKEDATA, sandb->child, regs.rdi, "/root");
+			ptrace(PTRACE_POKEDATA, sandb->child, regs.rdi, "/root/x");
 		}	}
 	rewind(f);
 	
@@ -128,15 +130,15 @@ void sandb_kill(struct sandbox *sandb) {
 }
 //Returns 0 if permission not available
 int checkperms_open(char *perm,int mode){
-	
+	errno=13;
 	if((mode&O_ACCMODE)==0|(mode&O_ACCMODE)==2)
 		if(perm[0]=='0')
-		{
-			printf("open System Call Bypassed\n");return 0;
+			{
+			fprintf(stderr, "EACCESS %s: open System Call Denied\n", strerror(errno));return 0;
 		}
 	if((mode&O_ACCMODE)==1|(mode&O_ACCMODE)==2)
 		if(perm[1]=='0')
-		{	printf("open System Call Bypassed\n");return 0;}
+		{	fprintf(stderr, "EACCESS %s: open System Call Denied\n", strerror(errno));return 0;}
 	return 1;
 }
 int checkperms_openat(char *perm,int mode){

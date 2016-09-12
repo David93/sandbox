@@ -14,7 +14,6 @@ int main(int argc, char **argv) {
    realpath(".",res_path);
 	//strcat(realpath,"/");
 	printf("%s\n",res_path);
-   int a=fnmatch("/home/dmjoshy/sandbox",res_path,FNM_PATHNAME);
-   printf("%d",a);
+  
    return 0;
 }
