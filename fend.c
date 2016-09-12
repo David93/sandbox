@@ -35,15 +35,35 @@ void renamehandle(struct sandbox* sandb, struct user_regs_struct regs,FILE *f){
 	char *perm;
 	get_path(sandb->child,regs.rsi,&path);
 	realpath(path,res_path);
-	
-	
+	char *path2;
+	char *res_path2;
+	get_path(sandb->child,regs.rdi,&path2);
+	realpath(path2,res_path2);
 	if(pattern_match(res_path,f,&perm)==1)
 	{	
+		errno=13;
 		if(perm[1]=='0'){
 			regs.orig_rax=__NR_getpid;
 			ptrace(PTRACE_SETREGS, sandb->child, NULL, &regs);
-			printf("rename System Call Bypassed\n");
-		}	}
+			fprintf(stderr, "EACCESS %s: rename System Call Denied\n", strerror(errno));
+		rewind(f);		
+			return;
+		}
+		
+	}
+	rewind(f);
+	if(pattern_match(res_path2,f,&perm)==1)
+	{	
+		errno=13;	
+		if(perm[1]=='0'){
+			regs.orig_rax=__NR_getpid;
+			ptrace(PTRACE_SETREGS, sandb->child, NULL, &regs);
+			fprintf(stderr, "EACCESS %s: rename System Call Denied\n", strerror(errno));
+	
+		}
+		rewind(f);		
+		return;
+	}
 	rewind(f);
 	
 }
@@ -56,8 +76,10 @@ void unlinkhandle(struct sandbox* sandb, struct user_regs_struct regs,FILE *f){
 	if(pattern_match(res_path,f,&perm)==1)
 	{	
 		if(perm[1]=='0'){
-			ptrace(PTRACE_POKEDATA, sandb->child, regs.rdi, "/root/x");
-			printf("unlink System Call Bypassed\n");
+			errno=13;
+			regs.orig_rax=__NR_getpid;
+			ptrace(PTRACE_SETREGS, sandb->child, NULL, &regs);
+			fprintf(stderr, "EACCESS %s: unlink System Call Denied\n", strerror(errno));
 		}	}
 	rewind(f);
 		
@@ -71,8 +93,10 @@ void rmhandle(struct sandbox* sandb, struct user_regs_struct regs,FILE *f){
 	if(pattern_match(res_path,f,&perm)==1)
 	{	
 		if(perm[1]=='0'){
-			ptrace(PTRACE_POKEDATA, sandb->child, regs.rsi, "/root/x");
-			printf("unlinkat System Call Bypassed\n");
+			errno=13;
+			regs.orig_rax=__NR_getpid;
+			ptrace(PTRACE_SETREGS, sandb->child, NULL, &regs);
+			fprintf(stderr, "EACCESS %s: unlinkat System Call Denied\n", strerror(errno));
 		}	}
 	rewind(f);
 		
@@ -86,18 +110,30 @@ void openathandle(struct sandbox* sandb, struct user_regs_struct regs,FILE *f){
 	realpath(path,res_path);
 	strcpy(res_path2,res_path);
 	strcat(res_path2,"/");
+	
 	if(pattern_match(res_path,f,&perm)==1) 
 	{	
 		if(checkperms_openat(perm,regs.rdx)==0){
-			ptrace(PTRACE_POKEDATA, sandb->child, regs.rsi, "/root/x");
+			errno=13;
+			regs.orig_rax=__NR_getpid;
+			ptrace(PTRACE_SETREGS, sandb->child, NULL, &regs);
+			fprintf(stderr, "EACCESS %s: openat System Call Denied\n", strerror(errno));
+			rewind(f);
+			return;
 		}	}
 	rewind(f);
 	if(pattern_match(res_path2,f,&perm)==1) 
 	{	
 		if(checkperms_openat(perm,regs.rdx)==0){
-			ptrace(PTRACE_POKEDATA, sandb->child, regs.rsi, "/root/x");
-		}	}
-	rewind(f);
+			errno=13;
+			regs.orig_rax=__NR_getpid;
+			ptrace(PTRACE_SETREGS, sandb->child, NULL, &regs);
+			fprintf(stderr, "EACCESS %s: openat System Call Denied\n", strerror(errno));
+			rewind(f);
+			return;
+		}	
+	}
+	
 		
 }
 void openhandle(struct sandbox* sandb, struct user_regs_struct regs,FILE *f){
@@ -112,8 +148,7 @@ void openhandle(struct sandbox* sandb, struct user_regs_struct regs,FILE *f){
 			regs.orig_rax=__NR_getpid;
 			
 			ptrace(PTRACE_SETREGS, sandb->child, NULL, &regs);
-			//ptrace(PTRACE_POKEDATA, sandb->child, regs.rdi, "/root");
-		}	}
+	}	}
 	rewind(f);
 		
 }
@@ -138,14 +173,15 @@ void accesshandle(struct sandbox* sandb, struct user_regs_struct regs,FILE *f){
 	char *path;
 	char *perm;
 	get_path(sandb->child,regs.rdi,&path);
-	//printf("%s \n",path);
-   
     if(pattern_match(path,f,&perm)==1)
 	{	
 		
 	if(checkperms_access(perm,regs.rsi)==0){
 			
-			ptrace(PTRACE_POKEDATA, sandb->child, regs.rdi, "/root/x");
+		errno=13;
+	    regs.orig_rax=__NR_getpid;
+		ptrace(PTRACE_SETREGS, sandb->child, NULL, &regs);
+		fprintf(stderr, "EACCESS %s: mkdir System Call Denied\n", strerror(errno));
 		}	}
 	rewind(f);
 	
@@ -203,21 +239,21 @@ int checkperms_openat(char *perm,int mode){
 	if((mode&O_ACCMODE)==0|(mode&O_ACCMODE)==2)
 		if(perm[0]=='0')
 			{
-			printf("openat System Call Bypassed\n");return 0;
+			return 0;
 		}
 	if((mode&O_ACCMODE)==1|(mode&O_ACCMODE)==2)
 		if(perm[1]=='0')
-		{	printf("openat System Call Bypassed\n");return 0;}
+		{	return 0;}
 	return 1;
 }
 int checkperms_access(char *perm,int mode){
 	
 	if(mode=1 && perm[2]=='0')
-	{	printf("access System Call Bypassed\n");return 0;}
+	{	return 0;}
 	if(mode=2 && perm[1]=='0')
-	{	printf("openat System Call Bypassed\n");return 0;}	
+	{	return 0;}	
 	if(mode=4 && perm[0]=='0')
-	{	printf("openat System Call Bypassed\n");return 0;}	
+	{	return 0;}	
 	
 	return 1;
 }
@@ -253,7 +289,6 @@ void get_path(pid_t child, long addr,
 	sprintf(*str,"%s",laddr);	
     
 }
-
 
 //Returns 1 if matched with last match for permissions
 int pattern_match(char *p,FILE *f,char** foundperm){
@@ -295,20 +330,6 @@ void sandb_handle_syscall(struct sandbox *sandb,FILE *f) {
       return;
     }
   }
-  	
-	 
-  
-  //return;
-  
-  
-  /*
-  if(regs.orig_rax == -1) {
-    printf("[SANDBOX] Segfault ?! KILLING !!!\n");
-  } else {
-    printf("[SANDBOX] Trying to use devil syscall (%llu) ?!? KILLING !!!\n", regs.orig_rax);
-  }
-  */
- 
 }
 
 void sandb_init(struct sandbox *sandb, int argc, char **argv) {
@@ -382,16 +403,13 @@ int main(int argc, char **argv) {
 		fp = fopen(strcat(pw->pw_dir,"/.fendrc"),"r");
 		if(fp==NULL)
 		{
-			printf("Must provide a config file.\n");
+			errno=13;
+			fprintf(stderr, "EACCESS %s: Must provide a config file.\n", strerror(errno));
 			exit(EXIT_FAILURE);
 		}
 	}
-  }/*
-  
-  if(argc < 2) {
-    errx(EXIT_FAILURE, "[SANDBOX] Usage : %s <elf> [<arg1...>]", argv[0]);
   }
- */
+ 
   
   if(strcmp(argv[1], "-c")!=0){
 	if(strstr(argv[1],"/")!=NULL)

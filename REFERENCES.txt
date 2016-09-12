@@ -1,0 +1,11 @@
+Links:
+Playing with ptrace: http://www.linuxjournal.com/article/6100?page=0,2
+Playing with ptrace2: http://theantway.com/2013/01/notes-for-playing-with-ptrace-on-64-bits-ubuntu-12-10/
+ptrace Ualberta slides: https://webdocs.cs.ualberta.ca/~paullu/C498/meng.ptrace.slides.pdf
+Flag for system calls: http://unix.superglobalmegacorp.com/NetBSD-0.8/newsrc/sys/fcntl.h.html
+System call numbers:unistd_64.h
+Linux man pages:http://man7.org/linux/man-pages/
+
+Students:
+Arjun Jagdish
+Sai Srivasta

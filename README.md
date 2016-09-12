@@ -8,3 +8,4 @@ v1.4:Handles openat.
 v1.5:Fixed execution.
 v1.6:Handles unlinkat
 v1.7:Handles rename
+v2.0:Final, removed all bypass to /root. Only outputs stderr now and bypassed to getpwid()
