@@ -1,4 +1,4 @@
 all: fend.c
-	gcc -o fend.o fend.c
+	gcc -o fend fend.c
 clean:
-	rm *.o
+	rm fend
