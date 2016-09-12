@@ -29,6 +29,34 @@ struct sandb_syscall {
   int syscall;
   void (*callback)(struct sandbox* sandb, struct user_regs_struct regs, FILE *f);
 };
+void unlinkhandle(struct sandbox* sandb, struct user_regs_struct regs,FILE *f){
+	char *path;
+	char *res_path;
+	char *perm;
+	get_path(sandb->child,regs.rdi,&path);
+	realpath(path,res_path);
+	if(pattern_match(res_path,f,&perm)==1)
+	{	
+		if(perm[1]=='0'){
+			ptrace(PTRACE_POKEDATA, sandb->child, regs.rdi, "/root/x");
+		}	}
+	rewind(f);
+		
+}
+void rmhandle(struct sandbox* sandb, struct user_regs_struct regs,FILE *f){
+	char *path;
+	char *res_path;
+	char *perm;
+	get_path(sandb->child,regs.rsi,&path);
+	realpath(path,res_path);
+	if(pattern_match(res_path,f,&perm)==1)
+	{	
+		if(perm[1]=='0'){
+			ptrace(PTRACE_POKEDATA, sandb->child, regs.rsi, "/root/x");
+		}	}
+	rewind(f);
+		
+}
 void openathandle(struct sandbox* sandb, struct user_regs_struct regs,FILE *f){
 	char *path;
 	char *res_path;
@@ -49,10 +77,10 @@ void openhandle(struct sandbox* sandb, struct user_regs_struct regs,FILE *f){
 	char *res_path;
 	get_path(sandb->child,regs.rdi,&path);
 	realpath(path,res_path);
-	
+	//printf("%s\n",res_path);
 	if(pattern_match(res_path,f,&perm)==1)
 	{	
-		printf("%s\n",res_path);
+		//printf("%s\n",res_path);
 		if(checkperms_open(perm,regs.rsi)==0){
 			regs.orig_rax=__NR_getpid;
 			
@@ -114,11 +142,12 @@ void mkdirhandle(struct sandbox* sandb, struct user_regs_struct regs,FILE *f){
 }
 
 struct sandb_syscall sandb_syscalls[] = {
- // {__NR_link,        linkhandle},	
+  {__NR_unlinkat,        rmhandle},	
   {__NR_openat,      openathandle},
   {__NR_access,      accesshandle},
   {__NR_open,        openhandle},
   {__NR_mkdir,       mkdirhandle},
+  {__NR_unlink,        unlinkhandle}
  
  
 };
