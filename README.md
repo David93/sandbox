@@ -7,3 +7,4 @@ v1.3:Handles mkdir.
 v1.4:Handles openat.
 v1.5:Fixed execution.
 v1.6:Handles unlinkat
+v1.7:Handles rename
