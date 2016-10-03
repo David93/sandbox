@@ -142,11 +142,14 @@ void openhandle(struct sandbox* sandb, struct user_regs_struct regs,FILE *f){
 	char *res_path;
 	get_path(sandb->child,regs.rdi,&path);
 	realpath(path,res_path);
+	
 	if(pattern_match(res_path,f,&perm)==1)
 	{	
+		//printf("%s\n",res_path);
 		if(checkperms_open(perm,regs.rsi)==0){
 			regs.orig_rax=__NR_getpid;
-			
+			//regs.rax=-1;//caacccc
+			//printf("huh\n");
 			ptrace(PTRACE_SETREGS, sandb->child, NULL, &regs);
 	}	}
 	rewind(f);
@@ -203,6 +206,12 @@ void mkdirhandle(struct sandbox* sandb, struct user_regs_struct regs,FILE *f){
 	rewind(f);
 	
 }
+void exithandle(struct sandbox* sandb, struct user_regs_struct regs,FILE *f){
+	errno=13;
+	regs.rax=-1;//caacccc
+	printf("huh\n");
+	ptrace(PTRACE_SETREGS, sandb->child, NULL, &regs);
+}
 
 struct sandb_syscall sandb_syscalls[] = {
   {__NR_unlinkat,        rmhandle},	
@@ -211,7 +220,8 @@ struct sandb_syscall sandb_syscalls[] = {
   {__NR_open,        openhandle},
   {__NR_mkdir,       mkdirhandle},
   {__NR_unlink,        unlinkhandle},
-  {__NR_rename,        renamehandle}
+  {__NR_rename,        renamehandle},
+  {__NR_getpid, 		exithandle}
    
  
 };
@@ -315,14 +325,15 @@ void sandb_handle_syscall(struct sandbox *sandb,FILE *f) {
   struct user_regs_struct regs;
   int syscall;
   if(entry_flag==0)
-  {entry_flag=1;return;}
+  {entry_flag=1;}
   
   if(ptrace(PTRACE_GETREGS, sandb->child, NULL, &regs) < 0)
     err(EXIT_FAILURE, "[SANDBOX] Failed to PTRACE_GETREGS:");
   syscall=regs.orig_rax;
+  printf("Sys call=%d\n",syscall);
   for(i = 0; i < sizeof(sandb_syscalls)/sizeof(*sandb_syscalls); i++) {
     if(regs.orig_rax == sandb_syscalls[i].syscall) {
-      if(sandb_syscalls[i].callback != NULL && entry_flag==1){
+      if(sandb_syscalls[i].callback != NULL ){
         sandb_syscalls[i].callback(sandb, regs, f);
 		entry_flag=0;
 	}
