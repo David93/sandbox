@@ -142,10 +142,10 @@ void openhandle(struct sandbox* sandb, struct user_regs_struct regs,FILE *f){
 	char *res_path;
 	get_path(sandb->child,regs.rdi,&path);
 	realpath(path,res_path);
-	
+	//printf("%s %s\n",res_path,path);
+		
 	if(pattern_match(res_path,f,&perm)==1)
 	{	
-		//printf("%s\n",res_path);
 		if(checkperms_open(perm,regs.rsi)==0){
 			regs.orig_rax=__NR_getpid;
 			//regs.rax=-1;//caacccc
@@ -302,13 +302,13 @@ void get_path(pid_t child, long addr,
 
 //Returns 1 if matched with last match for permissions
 int pattern_match(char *p,FILE *f,char** foundperm){
-	char* perm=malloc(20);
-	*foundperm=malloc(20);
-	char* pattern=malloc(20);
+	char* perm=malloc(100);
+	*foundperm=malloc(100);
+	char* pattern=malloc(100);
 	int match=0;
 	while (!feof(f) ) {
 		fscanf(f,"%s %s",perm,pattern);
-		//printf("%s\n",pattern);
+		//printf("%s %s\n",pattern,p );
 		if(fnmatch(pattern,p,FNM_PATHNAME)==0){
 			//printf("%s matched with %s!\n",p,pattern);
 			strcpy(*foundperm,perm);
